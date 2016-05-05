@@ -1,15 +1,10 @@
-//
-//  main.c
-//  AudioPlayer
-//
-//  Created by Arthur Emídio Teixeira Ferreira on 5/4/16.
-//  Copyright © 2016 Arthur Emidio. All rights reserved.
-//
+#include "audioplayer.h"
 
-#include <stdio.h>
+#undef main // prevenindo que o SDL tenha conflitos com a definição de main
 
-int main(int argc, const char * argv[]) {
-    // insert code here...
-    printf("Hello, World!\n");
+int main(int argc, char *argv[])
+{
+    startVideoPlayer(argc > 1 ? argv[1] : "summer.mp3");
+    
     return 0;
 }
