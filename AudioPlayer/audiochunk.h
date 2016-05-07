@@ -2,6 +2,8 @@
 #define audiochunk_h
 
 #include <semaphore.h>
+#include <fcntl.h>
+#include <stdint.h>
 
 struct AudioChunk {
     uint8_t *data;
@@ -31,5 +33,9 @@ AudioChunkQueue* createAudioChunkQueue(int maxCapacity);
 int insertAudioChunk(AudioChunk *chunk, AudioChunkQueue *queue);
 
 int getNextAudioChunk(AudioChunk **chunk, AudioChunkQueue *queue, int howManyBytes);
+
+void freeAudioChunkQueue(AudioChunkQueue **queue);
+
+void flushAudioChunkQueue(AudioChunkQueue *queue, int shouldUnlockMutex);
 
 #endif /* audiochunk_h */

@@ -16,6 +16,8 @@
 		8E0312CA1CDAEDAC00D23E0B /* libswscale.4.0.100.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 8E0312C41CDAEDAC00D23E0B /* libswscale.4.0.100.dylib */; };
 		8E0312CF1CDAEDE300D23E0B /* audiochunk.c in Sources */ = {isa = PBXBuildFile; fileRef = 8E0312CD1CDAEDE300D23E0B /* audiochunk.c */; };
 		8E0312D21CDAF79F00D23E0B /* audioplayer.c in Sources */ = {isa = PBXBuildFile; fileRef = 8E0312D01CDAF79F00D23E0B /* audioplayer.c */; };
+		8E8D33431CDE8C84001C2CE1 /* libcurl.4.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 8E8D33421CDE8C84001C2CE1 /* libcurl.4.dylib */; };
+		8E8D33471CDE8E16001C2CE1 /* lyricsdownloader.c in Sources */ = {isa = PBXBuildFile; fileRef = 8E8D33451CDE8E16001C2CE1 /* lyricsdownloader.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -43,6 +45,9 @@
 		8E0312CE1CDAEDE300D23E0B /* audiochunk.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = audiochunk.h; sourceTree = "<group>"; };
 		8E0312D01CDAF79F00D23E0B /* audioplayer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = audioplayer.c; sourceTree = "<group>"; };
 		8E0312D11CDAF79F00D23E0B /* audioplayer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = audioplayer.h; sourceTree = "<group>"; };
+		8E8D33421CDE8C84001C2CE1 /* libcurl.4.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcurl.4.dylib; path = /usr/local/Cellar/curl/7.48.0/lib/libcurl.4.dylib; sourceTree = "<absolute>"; };
+		8E8D33451CDE8E16001C2CE1 /* lyricsdownloader.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = lyricsdownloader.c; sourceTree = "<group>"; };
+		8E8D33461CDE8E16001C2CE1 /* lyricsdownloader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = lyricsdownloader.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +55,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8E8D33431CDE8C84001C2CE1 /* libcurl.4.dylib in Frameworks */,
 				8E0312C51CDAEDAC00D23E0B /* libavcodec.57.24.102.dylib in Frameworks */,
 				8E0312C61CDAEDAC00D23E0B /* libavformat.57.25.100.dylib in Frameworks */,
 				8E0312C71CDAEDAC00D23E0B /* libavutil.55.17.103.dylib in Frameworks */,
@@ -65,8 +71,9 @@
 		8E0312AC1CDAED3B00D23E0B = {
 			isa = PBXGroup;
 			children = (
-				8E0312CC1CDAEDB800D23E0B /* FFmpeg */,
-				8E0312CB1CDAEDB300D23E0B /* SDL */,
+				8E8D33441CDE8C93001C2CE1 /* curl */,
+				8E0312CC1CDAEDB800D23E0B /* ffmpeg */,
+				8E0312CB1CDAEDB300D23E0B /* sdl */,
 				8E0312B71CDAED3B00D23E0B /* AudioPlayer */,
 				8E0312B61CDAED3B00D23E0B /* Products */,
 			);
@@ -84,23 +91,25 @@
 			isa = PBXGroup;
 			children = (
 				8E0312B81CDAED3B00D23E0B /* main.c */,
-				8E0312D01CDAF79F00D23E0B /* audioplayer.c */,
 				8E0312D11CDAF79F00D23E0B /* audioplayer.h */,
-				8E0312CD1CDAEDE300D23E0B /* audiochunk.c */,
+				8E0312D01CDAF79F00D23E0B /* audioplayer.c */,
 				8E0312CE1CDAEDE300D23E0B /* audiochunk.h */,
+				8E0312CD1CDAEDE300D23E0B /* audiochunk.c */,
+				8E8D33461CDE8E16001C2CE1 /* lyricsdownloader.h */,
+				8E8D33451CDE8E16001C2CE1 /* lyricsdownloader.c */,
 			);
 			path = AudioPlayer;
 			sourceTree = "<group>";
 		};
-		8E0312CB1CDAEDB300D23E0B /* SDL */ = {
+		8E0312CB1CDAEDB300D23E0B /* sdl */ = {
 			isa = PBXGroup;
 			children = (
 				8E0312C21CDAEDAC00D23E0B /* libSDL-1.2.0.dylib */,
 			);
-			name = SDL;
+			name = sdl;
 			sourceTree = "<group>";
 		};
-		8E0312CC1CDAEDB800D23E0B /* FFmpeg */ = {
+		8E0312CC1CDAEDB800D23E0B /* ffmpeg */ = {
 			isa = PBXGroup;
 			children = (
 				8E0312BF1CDAEDAC00D23E0B /* libavcodec.57.24.102.dylib */,
@@ -109,7 +118,16 @@
 				8E0312C31CDAEDAC00D23E0B /* libswresample.2.0.101.dylib */,
 				8E0312C41CDAEDAC00D23E0B /* libswscale.4.0.100.dylib */,
 			);
-			name = FFmpeg;
+			name = ffmpeg;
+			sourceTree = "<group>";
+		};
+		8E8D33441CDE8C93001C2CE1 /* curl */ = {
+			isa = PBXGroup;
+			children = (
+				8E8D33421CDE8C84001C2CE1 /* libcurl.4.dylib */,
+			);
+			name = curl;
+			path = AudioPlayer;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -168,6 +186,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8E8D33471CDE8E16001C2CE1 /* lyricsdownloader.c in Sources */,
 				8E0312CF1CDAEDE300D23E0B /* audiochunk.c in Sources */,
 				8E0312D21CDAF79F00D23E0B /* audioplayer.c in Sources */,
 				8E0312B91CDAED3B00D23E0B /* main.c in Sources */,
@@ -264,6 +283,7 @@
 					"$(inherited)",
 					/usr/local/Cellar/ffmpeg/3.0.1/lib,
 					/usr/local/Cellar/sdl/1.2.15/lib,
+					/usr/local/Cellar/curl/7.48.0/lib,
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -277,6 +297,7 @@
 					"$(inherited)",
 					/usr/local/Cellar/ffmpeg/3.0.1/lib,
 					/usr/local/Cellar/sdl/1.2.15/lib,
+					/usr/local/Cellar/curl/7.48.0/lib,
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -301,6 +322,7 @@
 				8E0312BE1CDAED3B00D23E0B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

@@ -1,34 +1,22 @@
 #ifndef audioplayer_h
 #define audioplayer_h
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <assert.h>
-#include <pthread.h>
-#include <semaphore.h>
+void startAudioPlayer(const char *fileName, int bufferSize);
 
-#include <libavformat/avformat.h>
-#include <libswscale/swscale.h>
-#include <libswresample/swresample.h>
-#include <libavutil/imgutils.h>
-#include <libavutil/opt.h>
+void finishAudioPlayer();
 
-#include <SDL/SDL.h>
+void pauseAudioPlayer();
 
-#include "audiochunk.h"
+void playAudioPlayer();
 
-int startVideoPlayer(const char *videoName);
+void stopAudioPlayer();
 
-void openFile(const char *fileName);
+void showAudioInfo();
 
-void getStreamInformation();
+void showAudioLyrics();
 
-AVCodecContext* getCodecContext(int streamIndex);
+void showAudioBuffer(int interval);
 
-void configureAudio();
-
-void* producer(void *args);
-
-void audioConsumer(void *userdata, uint8_t *stream, int streamLength);
+void hideAudioBuffer();
 
 #endif /* audioplayer_h */
