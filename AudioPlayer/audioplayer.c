@@ -153,12 +153,12 @@ void startAudioPlayer(const char *fileName, int bufferSize)
     av_register_all();
     
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
-        printf("A SDL nao pode ser inicializada: %s\n", SDL_GetError());
+        printf("Error: SDL could not be initialized: %s\n", SDL_GetError());
         exit(1);
     }
     
     if (avformat_open_input(&formatCtx, fileName, NULL, NULL) < 0) {
-        printf("Erro: arquivo invalido.\n");
+        printf("Error: invalid file.\n");
         exit(1);
     }
     
@@ -325,7 +325,7 @@ void* _producer(void *args)
 void _getStreamInformation()
 {
     if (avformat_find_stream_info(formatCtx, NULL) < 0) {
-        printf("Erro: nao foi possivel encontrar informacoes sobre o conteudo do audio\n");
+        printf("Error: It wasn't possible to find stream information in the audio file.\n");
         exit(1);
     }
     
@@ -337,7 +337,7 @@ void _getStreamInformation()
     }
     
     if (audioStreamIndex == -1) {
-        printf("Erro: nao existe stream de audio no arquivo especificado\n");
+        printf("Error: There is no audio stream in the specified file.\n");
         exit(1);
     }
 }
@@ -347,19 +347,19 @@ AVCodecContext* _getCodecContext(int streamIndex)
     AVCodecContext *codecCtxOrig = formatCtx->streams[streamIndex]->codec;
     AVCodec *codec = avcodec_find_decoder(codecCtxOrig->codec_id);
     if (codec == NULL) {
-        printf("Erro: codec de video invalido\n");
+        printf("Error: invalid audio codec\n");
         exit(1);
     }
     
     AVCodecContext *codecCtx = avcodec_alloc_context3(codec);
     if (avcodec_copy_context(codecCtx, codecCtxOrig) < 0) {
-        printf("Erro: nao pode copiar o contexto do codec de video\n");
+        printf("Error: the audio codec context could not be copied.\n");
         exit(1);
     }
     avcodec_close(codecCtxOrig);
     
     if (avcodec_open2(codecCtx, codec, NULL) < 0) {
-        printf("Erro: nao pode abrir o codec de video\n");
+        printf("Error: the audio codec could not be opened.\n");
         exit(1);
     }
     
@@ -388,7 +388,7 @@ void _configureAudio()
     tempAudioSpec.callback = _consumer;
     
     if (SDL_OpenAudio(&tempAudioSpec, &audioSpec) < 0) {
-        printf("Erro: erro em abrir o audio: %s\n", SDL_GetError());
+        printf("Error: SDL failed to open the audio device: %s\n", SDL_GetError());
         exit(-1);
     }
 }
