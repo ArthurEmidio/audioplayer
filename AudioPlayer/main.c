@@ -11,6 +11,8 @@ int main(int argc, char *argv[])
 {
     startAudioPlayer(argc > 1 ? argv[1] : "girl.mp3", 250);
     
+    printf("Minimalistic Audio Player, created by Arthur Emidio.\n");
+    
     char *opt = (char*) malloc(sizeof(char) * 100);
     while (1) {
         printf("Command (enter \"help\" to view all options): ");
