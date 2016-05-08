@@ -44,6 +44,8 @@ sem_t *displayAudioBufferSem;
 
 pthread_mutex_t lyricsMutex = PTHREAD_MUTEX_INITIALIZER;
 
+pthread_cond_t playerSleepCond = PTHREAD_COND_INITIALIZER;
+
 void* _downloadLyrics(void *args)
 {
     AVDictionaryEntry *titleEntry = av_dict_get(formatCtx->metadata, "title", NULL, 0);
@@ -69,17 +71,20 @@ void* _displayAudioBufferFunc(void *args)
     while (1) {
         sem_wait(displayAudioBufferSem);
         
-        while (interval >= 0) {
+        pthread_mutex_lock(&displayAudioBufferMutex);
+        while (displayAudioBufferInterval >= 0) {
+            interval = displayAudioBufferInterval;
+            pthread_mutex_unlock(&displayAudioBufferMutex);
+
             pthread_mutex_lock(&audioChunkQueue->mutex);
             printf("Audio buffer: %d / %d\n", audioChunkQueue->quantity, audioChunkQueue->capacity);
             pthread_mutex_unlock(&audioChunkQueue->mutex);
             
-            pthread_mutex_lock(&displayAudioBufferMutex);
-            interval = displayAudioBufferInterval;
-            pthread_mutex_unlock(&displayAudioBufferMutex);
-            
             SDL_Delay(interval);
+            
+            pthread_mutex_lock(&displayAudioBufferMutex);
         }
+        pthread_mutex_unlock(&displayAudioBufferMutex);
     }
     
     return NULL;
@@ -123,7 +128,7 @@ void showAudioInfo()
         printf("Channels: %d\n", audioCodecCtx->channels);
     }
     printf("Sample rate: %d Hz\n", audioCodecCtx->sample_rate);
-    printf("Duration: %lld s\n", (long long) formatCtx->duration);
+    printf("Duration: %lld ms\n", (long long) formatCtx->duration);
     
     AVDictionaryEntry *titleEntry = av_dict_get(formatCtx->metadata, "title", NULL, 0);
     if (titleEntry != NULL) {
@@ -204,6 +209,8 @@ void playAudioPlayer()
     pthread_mutex_lock(&playbackStateMutex);
     playbackState = PLAYING;
     pthread_mutex_unlock(&playbackStateMutex);
+    
+    pthread_cond_broadcast(&playerSleepCond);
 }
 
 void finishAudioPlayer()
@@ -223,13 +230,11 @@ void _consumer(void *data, uint8_t *stream, int streamLength)
         stopAudioPlayer();
         shouldBroadcast = 0;
         pthread_cond_broadcast(&producerHasFinishedCond);
-        return;
     }
     
     pthread_mutex_lock(&playbackStateMutex);
-    if (playbackState == STOPPED || playbackState == PAUSED) {
-        pthread_mutex_unlock(&playbackStateMutex);
-        return;
+    while (playbackState == STOPPED || playbackState == PAUSED) {
+        pthread_cond_wait(&playerSleepCond, &playbackStateMutex);
     }
     pthread_mutex_unlock(&playbackStateMutex);
     
@@ -279,7 +284,11 @@ void* _producer(void *args)
         pthread_mutex_lock(&playbackStateMutex);
         if (playbackState == STOPPED) {
             av_seek_frame(formatCtx, audioStreamIndex, 0, 0);
-            flushAudioChunkQueue(audioChunkQueue, 1); // WARNING: causa busy waiting
+            flushAudioChunkQueue(audioChunkQueue, 1);
+        }
+        
+        while (playbackState == STOPPED) {
+            pthread_cond_wait(&playerSleepCond, &playbackStateMutex);
         }
         pthread_mutex_unlock(&playbackStateMutex);
         
