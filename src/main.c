@@ -5,13 +5,19 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#undef main // prevenindo que o SDL tenha conflitos com a definição de main
+#undef main // preventing that SDL has any conflicts with main()
 
 int main(int argc, char *argv[])
 {
-    startAudioPlayer(argc > 1 ? argv[1] : "girl.mp3", 250);
+//    startAudioPlayer(argc > 1 ? argv[1] : "jonas.mp3", 250);
     
     printf("Minimalist Audio Player, created by Arthur Emidio.\n");
+    
+    if (argc != 2) {
+        printf("Usage: ./audioplayer audio_file.ext\n");
+        exit(1);
+    }
+    startAudioPlayer(argv[1], 250);
     
     char *opt = (char*) malloc(sizeof(char) * 100);
     while (1) {

@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
+static void _freeAudioChunk(AudioChunk **chunk);
+
 AudioChunkQueue* createAudioChunkQueue(int maxCapacity)
 {
     AudioChunkQueue *queue = malloc(sizeof(AudioChunkQueue));
@@ -21,63 +23,6 @@ AudioChunkQueue* createAudioChunkQueue(int maxCapacity)
     queue->empty = sem_open("/empty", O_CREAT, 0644, maxCapacity);
     
     return queue;
-}
-
-void freeAudioChunk(AudioChunk **chunk) {
-    free((*chunk)->data);
-    free(*chunk);
-}
-
-void freeAudioChunkList(AudioChunkList **list)
-{
-    if (list == NULL) return;
-    
-    AudioChunkList *next = (*list)->next;
-    freeAudioChunk(&(*list)->chunk);
-    free(*list);
-    freeAudioChunkList(&next);
-}
-
-void flushAudioChunkQueue(AudioChunkQueue *queue, int shouldUnlockMutex)
-{
-    pthread_mutex_lock(&queue->mutex);
-    
-    AudioChunkList *chunkList = queue->first;
-    while (chunkList != NULL) {
-        AudioChunkList *next = chunkList->next;
-
-        freeAudioChunk(&chunkList->chunk);
-        free(chunkList);
-
-        chunkList = next;
-        
-        sem_wait(queue->full);
-        sem_post(queue->empty);
-    }
-    
-    queue->first = NULL;
-    queue->last = NULL;
-    queue->quantity = 0;
-    
-    if (shouldUnlockMutex) {
-        pthread_mutex_unlock(&queue->mutex);
-    }
-}
-
-void freeAudioChunkQueue(AudioChunkQueue **queue)
-{
-    flushAudioChunkQueue(*queue, 0);
-    
-    sem_unlink("/full");
-    sem_unlink("/empty");
-    
-    sem_close((*queue)->full);
-    sem_close((*queue)->empty);
-    
-    pthread_mutex_destroy(&(*queue)->mutex);
-    
-    free(*queue);
-    *queue = NULL;
 }
 
 int insertAudioChunk(AudioChunk *chunk, AudioChunkQueue *queue)
@@ -119,8 +64,6 @@ int getNextAudioChunk(AudioChunk **chunk, AudioChunkQueue *queue, int howManyByt
     sem_wait(queue->full);
     pthread_mutex_lock(&queue->mutex);
     
-//    printf("%d\n", queue->quantity);
-    
     AudioChunkList *first = queue->first;
     if (first->chunk->size <= howManyBytes) {
         *chunk = first->chunk;
@@ -129,7 +72,7 @@ int getNextAudioChunk(AudioChunk **chunk, AudioChunkQueue *queue, int howManyByt
         queue->quantity--;
         if (queue->quantity == 0) {
             queue->first = NULL;
-            queue->first = NULL;
+            queue->last = NULL;
         }
         
         free(first);
@@ -152,4 +95,52 @@ int getNextAudioChunk(AudioChunk **chunk, AudioChunkQueue *queue, int howManyByt
     pthread_mutex_unlock(&queue->mutex);
     
     return 1;
+}
+
+void flushAudioChunkQueue(AudioChunkQueue *queue, int shouldUnlockMutex)
+{
+    pthread_mutex_lock(&queue->mutex);
+    
+    AudioChunkList *chunkList = queue->first;
+    while (chunkList != NULL) {
+        AudioChunkList *next = chunkList->next;
+
+        _freeAudioChunk(&chunkList->chunk);
+        free(chunkList);
+
+        chunkList = next;
+        
+        sem_wait(queue->full);
+        sem_post(queue->empty);
+    }
+    
+    queue->first = NULL;
+    queue->last = NULL;
+    queue->quantity = 0;
+    
+    if (shouldUnlockMutex) {
+        pthread_mutex_unlock(&queue->mutex);
+    }
+}
+
+void freeAudioChunkQueue(AudioChunkQueue **queue)
+{
+    flushAudioChunkQueue(*queue, 0);
+    
+    sem_unlink("/full");
+    sem_unlink("/empty");
+    
+    sem_close((*queue)->full);
+    sem_close((*queue)->empty);
+    
+    pthread_mutex_destroy(&(*queue)->mutex);
+    
+    free(*queue);
+    *queue = NULL;
+}
+
+void _freeAudioChunk(AudioChunk **chunk)
+{
+    free((*chunk)->data);
+    free(*chunk);
 }

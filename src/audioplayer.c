@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <fcntl.h>
+#include <string.h>
 
 #include <libavformat/avformat.h>
 #include <libswresample/swresample.h>
@@ -17,16 +18,17 @@
 
 #include <SDL/SDL.h>
 
-static void* _producer(void *args);
 static void _consumer(void *userdata, uint8_t *stream, int streamLength);
-
+static void* _producer(void *args);
 static void _getStreamInformation();
 static AVCodecContext* _getCodecContext(int streamIndex);
 static void _configureAudio();
+static void* _downloadLyrics(void *args);
+static void* _logAudioBuffer(void *args);
 
+int audioStreamIndex = -1;
 AVFormatContext *formatCtx = NULL;
 AVCodecContext *audioCodecCtx = NULL;
-int audioStreamIndex = -1;
 AudioChunkQueue *audioChunkQueue = NULL;
 struct SwrContext *swrCtx = NULL;
 SDL_AudioSpec audioSpec;
@@ -46,63 +48,69 @@ pthread_mutex_t lyricsMutex = PTHREAD_MUTEX_INITIALIZER;
 
 pthread_cond_t playerSleepCond = PTHREAD_COND_INITIALIZER;
 
-void* _downloadLyrics(void *args)
+void startAudioPlayer(const char *fileName, int bufferSize)
 {
-    AVDictionaryEntry *titleEntry = av_dict_get(formatCtx->metadata, "title", NULL, 0);
-    AVDictionaryEntry *artistEntry = av_dict_get(formatCtx->metadata, "artist", NULL, 0);
-    AVDictionaryEntry *lyricsEntry = av_dict_get(formatCtx->metadata, "lyrics", NULL, AV_DICT_IGNORE_SUFFIX);
+    av_register_all();
     
-    if (lyricsEntry == NULL && titleEntry != NULL && artistEntry != NULL) {
-        pthread_mutex_lock(&lyricsMutex);
-        char *lyrics = getLyrics(artistEntry->value, titleEntry->value);
-        if (lyrics != NULL) {
-            av_dict_set(&formatCtx->metadata, "lyrics", lyrics, AV_DICT_DONT_STRDUP_VAL);
-        }
-        pthread_mutex_unlock(&lyricsMutex);
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
+        printf("Error: SDL could not be initialized: %s\n", SDL_GetError());
+        exit(1);
     }
     
-    return NULL;
+    if (avformat_open_input(&formatCtx, fileName, NULL, NULL) < 0) {
+        printf("Error: invalid file.\n");
+        exit(1);
+    }
+    
+    _getStreamInformation();
+    
+    audioCodecCtx = _getCodecContext(audioStreamIndex);
+    audioChunkQueue = createAudioChunkQueue(bufferSize);
+    _configureAudio();
+    
+    sem_unlink("/displayAudioBuffer");
+    displayAudioBufferSem = sem_open("/displayAudioBuffer", O_CREAT, 0644, 0);
+    pthread_t displayAudioBufferThread;
+    pthread_create(&displayAudioBufferThread, NULL, &_logAudioBuffer, NULL);
+    
+    pthread_t lyricsDownloaderThread;
+    pthread_create(&lyricsDownloaderThread, NULL, &_downloadLyrics, NULL);
+    
+    pthread_t producerThread;
+    pthread_create(&producerThread, NULL, &_producer, NULL);
 }
 
-void* _displayAudioBufferFunc(void *args)
+void playAudioPlayer()
 {
-    int interval;
+    pthread_mutex_lock(&playbackStateMutex);
+    playbackState = PLAYING;
+    pthread_mutex_unlock(&playbackStateMutex);
     
-    while (1) {
-        sem_wait(displayAudioBufferSem);
+    pthread_cond_broadcast(&playerSleepCond);
+}
+
+void pauseAudioPlayer()
+{
+    pthread_mutex_lock(&playbackStateMutex);
+    playbackState = PAUSED;
+    pthread_mutex_unlock(&playbackStateMutex);
+}
+
+void stopAudioPlayer()
+{
+    pthread_mutex_lock(&playbackStateMutex);
+    if (playbackState != STOPPED) {
+        playbackState = STOPPED;
+        flushAudioChunkQueue(audioChunkQueue, 1);
+        pthread_mutex_unlock(&playbackStateMutex);
         
-        pthread_mutex_lock(&displayAudioBufferMutex);
-        while (displayAudioBufferInterval >= 0) {
-            interval = displayAudioBufferInterval;
-            pthread_mutex_unlock(&displayAudioBufferMutex);
-
-            pthread_mutex_lock(&audioChunkQueue->mutex);
-            printf("Audio buffer: %d / %d\n", audioChunkQueue->quantity, audioChunkQueue->capacity);
-            pthread_mutex_unlock(&audioChunkQueue->mutex);
-            
-            SDL_Delay(interval);
-            
-            pthread_mutex_lock(&displayAudioBufferMutex);
+        pthread_mutex_lock(&producerHasFinishedMutex);
+        if (producerHasFinished) {
+            pthread_cond_broadcast(&producerHasFinishedCond);
         }
-        pthread_mutex_unlock(&displayAudioBufferMutex);
+        pthread_mutex_unlock(&producerHasFinishedMutex);
     }
-    
-    return NULL;
-}
-
-void showAudioBuffer(int interval)
-{
-    pthread_mutex_lock(&displayAudioBufferMutex);
-    displayAudioBufferInterval = interval;
-    pthread_mutex_unlock(&displayAudioBufferMutex);
-    sem_post(displayAudioBufferSem);
-}
-
-void hideAudioBuffer()
-{
-    pthread_mutex_lock(&displayAudioBufferMutex);
-    displayAudioBufferInterval = -1;
-    pthread_mutex_unlock(&displayAudioBufferMutex);
+    pthread_mutex_unlock(&playbackStateMutex);
 }
 
 void showAudioLyrics()
@@ -148,69 +156,19 @@ void showAudioInfo()
     printf("\n\n");
 }
 
-void startAudioPlayer(const char *fileName, int bufferSize)
+void showAudioBuffer(int interval)
 {
-    av_register_all();
-    
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
-        printf("Error: SDL could not be initialized: %s\n", SDL_GetError());
-        exit(1);
-    }
-    
-    if (avformat_open_input(&formatCtx, fileName, NULL, NULL) < 0) {
-        printf("Error: invalid file.\n");
-        exit(1);
-    }
-    
-    _getStreamInformation();
-    
-    audioCodecCtx = _getCodecContext(audioStreamIndex);
-    audioChunkQueue = createAudioChunkQueue(bufferSize);
-    _configureAudio();
-    
-    sem_unlink("/displayAudioBuffer");
-    displayAudioBufferSem = sem_open("/displayAudioBuffer", O_CREAT, 0644, 0);
-    pthread_t displayAudioBufferThread;
-    pthread_create(&displayAudioBufferThread, NULL, &_displayAudioBufferFunc, NULL);
-    
-    pthread_t lyricsDownloaderThread;
-    pthread_create(&lyricsDownloaderThread, NULL, &_downloadLyrics, NULL);
-    
-    pthread_t producerThread;
-    pthread_create(&producerThread, NULL, &_producer, NULL);
+    pthread_mutex_lock(&displayAudioBufferMutex);
+    displayAudioBufferInterval = interval;
+    pthread_mutex_unlock(&displayAudioBufferMutex);
+    sem_post(displayAudioBufferSem);
 }
 
-void stopAudioPlayer()
+void hideAudioBuffer()
 {
-    pthread_mutex_lock(&playbackStateMutex);
-    if (playbackState != STOPPED) {
-        playbackState = STOPPED;
-        flushAudioChunkQueue(audioChunkQueue, 1);
-        pthread_mutex_unlock(&playbackStateMutex);
-        
-        pthread_mutex_lock(&producerHasFinishedMutex);
-        if (producerHasFinished) {
-            pthread_cond_broadcast(&producerHasFinishedCond);
-        }
-        pthread_mutex_unlock(&producerHasFinishedMutex);
-    }
-    pthread_mutex_unlock(&playbackStateMutex);
-}
-
-void pauseAudioPlayer()
-{
-    pthread_mutex_lock(&playbackStateMutex);
-    playbackState = PAUSED;
-    pthread_mutex_unlock(&playbackStateMutex);
-}
-
-void playAudioPlayer()
-{
-    pthread_mutex_lock(&playbackStateMutex);
-    playbackState = PLAYING;
-    pthread_mutex_unlock(&playbackStateMutex);
-    
-    pthread_cond_broadcast(&playerSleepCond);
+    pthread_mutex_lock(&displayAudioBufferMutex);
+    displayAudioBufferInterval = -1;
+    pthread_mutex_unlock(&displayAudioBufferMutex);
 }
 
 void finishAudioPlayer()
@@ -221,7 +179,7 @@ void finishAudioPlayer()
     avformat_close_input(&formatCtx);
 }
 
-void _consumer(void *data, uint8_t *stream, int streamLength)
+static void _consumer(void *data, uint8_t *stream, int streamLength)
 {
     static int shouldBroadcast = 0;
     
@@ -264,7 +222,7 @@ void _consumer(void *data, uint8_t *stream, int streamLength)
     }
 }
 
-void* _producer(void *args)
+static void* _producer(void *args)
 {
     playbackState = PLAYING;
     SDL_PauseAudio(0);
@@ -275,10 +233,6 @@ void* _producer(void *args)
     AVPacket packet;
     AVFrame *audioFrame = av_frame_alloc();
     int finishedFrame;
-    
-    SDL_Rect rect;
-    rect.x = 0;
-    rect.y = 0;
     
     while (1) {
         pthread_mutex_lock(&playbackStateMutex);
@@ -322,7 +276,7 @@ void* _producer(void *args)
     return NULL;
 }
 
-void _getStreamInformation()
+static void _getStreamInformation()
 {
     if (avformat_find_stream_info(formatCtx, NULL) < 0) {
         printf("Error: It wasn't possible to find stream information in the audio file.\n");
@@ -342,7 +296,7 @@ void _getStreamInformation()
     }
 }
 
-AVCodecContext* _getCodecContext(int streamIndex)
+static AVCodecContext* _getCodecContext(int streamIndex)
 {
     AVCodecContext *codecCtxOrig = formatCtx->streams[streamIndex]->codec;
     AVCodec *codec = avcodec_find_decoder(codecCtxOrig->codec_id);
@@ -366,7 +320,7 @@ AVCodecContext* _getCodecContext(int streamIndex)
     return codecCtx;
 }
 
-void _configureAudio()
+static void _configureAudio()
 {
     swrCtx = swr_alloc();
     av_opt_set_int(swrCtx, "in_channel_count", audioCodecCtx->channels, 0);
@@ -391,4 +345,48 @@ void _configureAudio()
         printf("Error: SDL failed to open the audio device: %s\n", SDL_GetError());
         exit(-1);
     }
+}
+
+static void* _downloadLyrics(void *args)
+{
+    AVDictionaryEntry *titleEntry = av_dict_get(formatCtx->metadata, "title", NULL, 0);
+    AVDictionaryEntry *artistEntry = av_dict_get(formatCtx->metadata, "artist", NULL, 0);
+    AVDictionaryEntry *lyricsEntry = av_dict_get(formatCtx->metadata, "lyrics", NULL, AV_DICT_IGNORE_SUFFIX);
+    
+    if ((lyricsEntry == NULL || strlen(lyricsEntry->value) == 0) && titleEntry != NULL && artistEntry != NULL) {
+        pthread_mutex_lock(&lyricsMutex);
+        char *lyrics = getLyrics(artistEntry->value, titleEntry->value);
+        if (lyrics != NULL) {
+            av_dict_set(&formatCtx->metadata, "lyrics", lyrics, AV_DICT_DONT_STRDUP_VAL);
+        }
+        pthread_mutex_unlock(&lyricsMutex);
+    }
+    
+    return NULL;
+}
+
+static void* _logAudioBuffer(void *args)
+{
+    int interval;
+    
+    while (1) {
+        sem_wait(displayAudioBufferSem);
+        
+        pthread_mutex_lock(&displayAudioBufferMutex);
+        while (displayAudioBufferInterval >= 0) {
+            interval = displayAudioBufferInterval;
+            pthread_mutex_unlock(&displayAudioBufferMutex);
+            
+            pthread_mutex_lock(&audioChunkQueue->mutex);
+            printf("Audio buffer: %d / %d\n", audioChunkQueue->quantity, audioChunkQueue->capacity);
+            pthread_mutex_unlock(&audioChunkQueue->mutex);
+            
+            SDL_Delay(interval);
+            
+            pthread_mutex_lock(&displayAudioBufferMutex);
+        }
+        pthread_mutex_unlock(&displayAudioBufferMutex);
+    }
+    
+    return NULL;
 }
